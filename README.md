@@ -1,378 +1,285 @@
-\# Trabajo Práctico Integrador — Diseño de Sistemas NoSQL de Alto Rendimiento
+# Trabajo Práctico Integrador — Diseño de Sistemas NoSQL de Alto Rendimiento
 
+## Descripción general
 
+El dominio del proyecto se enfoca en un e-commerce de productos electrónicos simples, como computadora, celular, mouse, teclado, monitor, auriculares, router, cable HDMI y otros accesorios tecnológicos. Esta decisión permite mantener el caso de negocio claro y coherente durante todo el trabajo.
 
-\## Descripción general
+Este proyecto implementa una plataforma de **e-commerce de alto rendimiento** utilizando **MongoDB** y **Redis**.
 
-
-
-Este proyecto implementa una plataforma de e-commerce de alto rendimiento utilizando MongoDB y Redis.
-
-
-
-MongoDB se utiliza como fuente de verdad persistente para almacenar usuarios, productos, órdenes, pagos, movimientos de inventario y reportes de ventas. Redis se utiliza como capa de velocidad para manejar datos temporales o de alta frecuencia, como sesiones, carritos activos, rankings de productos más vistos y eventos recientes.
-
-
+MongoDB se utiliza como fuente de verdad persistente para almacenar usuarios, productos electrónicos, órdenes, pagos, movimientos de inventario y reportes de ventas. Redis se utiliza como capa de velocidad para manejar datos temporales o de alta frecuencia, como sesiones, carritos activos, rankings de productos más vistos y eventos recientes.
 
 El objetivo del trabajo es demostrar el diseño de una arquitectura NoSQL moderna, aplicando modelado documental, integración con PyMongo, pipelines de agregación, índices ESR, transacciones multi-documento, análisis CAP, estrategia de sharding y aceleración con Redis.
 
+---
 
+## Tecnologías utilizadas
 
-\---
+- Python
+- PyMongo
+- MongoDB
+- MongoDB Compass
+- Redis
+- Git / GitHub
 
+---
 
-
-\## Tecnologías utilizadas
-
-
-
-\- Python
-
-\- PyMongo
-
-\- MongoDB
-
-\- MongoDB Compass
-
-\- Redis
-
-\- Git / GitHub
-
-
-
-\---
-
-
-
-\## Estructura del proyecto
-
-
+## Estructura del proyecto
 
 ```txt
-
-ecommerce\_tp/
-
+ecommerce_tp/
 │
-
 ├── README.md
-
 ├── requirements.txt
-
 ├── .gitignore
-
 │
+└── src/
+    ├── seed_ecommerce.py
+    ├── app_connection.py
+    ├── aggregation_pipelines.py
+    ├── optimization_indexes.py
+    ├── checkout_transaction.py
+    ├── redis_structures.py
+    └── redis_cache_policy.py
+```
 
-├── src/
+---
 
-│   ├── seed\_ecommerce.py
-
-│   ├── app\_connection.py
-
-│   ├── aggregation\_pipelines.py
-
-│   ├── optimization\_indexes.py
-
-│   ├── checkout\_transaction.py
-
-│   ├── redis\_structures.py
-
-│   └── redis\_cache\_policy.py
-
-│
-
-├── docs/
-
-└── exports/
-
-
-
-Instalación de dependencias
-
-
+## Instalación de dependencias
 
 Para instalar las dependencias necesarias:
 
-
-
+```bash
 pip install -r requirements.txt
+```
 
+El archivo `requirements.txt` contiene:
 
-
-El archivo requirements.txt contiene:
-
-
-
+```txt
 pymongo
-
 redis
+```
 
-Configuración de MongoDB
+---
 
+## Configuración de MongoDB
 
-
-Para ejecutar transacciones multi-documento, MongoDB debe estar configurado como un Replica Set.
-
-
+Para ejecutar transacciones multi-documento, MongoDB debe estar configurado como un **Replica Set**.
 
 En este proyecto se configuró un Replica Set local de un solo nodo llamado:
 
-
-
+```txt
 rs0
-
-
+```
 
 La URI utilizada por PyMongo es:
 
-
-
+```txt
 mongodb://localhost:27017/?replicaSet=rs0
+```
 
-Configuración de Redis
+---
 
-
+## Configuración de Redis
 
 Redis debe estar levantado localmente en:
 
-
-
+```txt
 localhost:6379
-
-
+```
 
 Para verificar que Redis está funcionando:
 
-
-
+```bash
 redis-cli ping
-
-
+```
 
 Resultado esperado:
 
-
-
+```txt
 PONG
+```
 
-Scripts principales
+## Orden recomendado de ejecución
 
-1\. Seed inicial de MongoDB
+```bash
+python src/seed_ecommerce.py
+python src/app_connection.py
+python src/aggregation_pipelines.py
+python src/optimization_indexes.py
+python src/checkout_transaction.py
+python src/redis_structures.py
+python src/redis_cache_policy.py
 
+```
 
+---
 
-Carga datos iniciales en la base ecommerce\_tp.
+## Scripts principales
 
+### 1. Seed inicial de MongoDB
 
+Carga datos iniciales en la base `ecommerce_tp`.
 
-python src/seed\_ecommerce.py
-
-
+```bash
+python src/seed_ecommerce.py
+```
 
 Este script crea datos de prueba en las colecciones:
 
+- `users`
+- `products`
+- `orders`
+- `payments`
+- `inventory_movements`
+- `daily_sales`
 
+Resultado esperado del seed:
 
-users
+- 12 usuarios
+- 24 productos electrónicos
+- 48 órdenes
+- 48 pagos
+- 85 movimientos de inventario
+- 11 días con ventas agregadas
 
-products
+El seed genera múltiples órdenes por día para simular un comportamiento más realista de un e-commerce.
 
-orders
+---
 
-payments
-
-inventory\_movements
-
-daily\_sales
-
-2\. Conexión con PyMongo
-
-
+### 2. Conexión con PyMongo
 
 Valida la conexión entre Python y MongoDB.
 
-
-
-python src/app\_connection.py
-
-
+```bash
+python src/app_connection.py
+```
 
 Este script consulta productos activos, órdenes por usuario y productos por atributos variables.
 
+---
 
+### 3. Pipelines de agregación
 
-3\. Pipelines de agregación
+Ejecuta tres pipelines usando **Aggregation Framework**.
 
-
-
-Ejecuta tres pipelines usando Aggregation Framework.
-
-
-
-python src/aggregation\_pipelines.py
-
-
+```bash
+python src/aggregation_pipelines.py
+```
 
 Pipelines implementados:
 
+1. Ventas totales por día.
+2. Productos electrónicos más vendidos.
+3. Ranking de clientes por gasto total.
 
+---
 
-Ventas totales por día.
-
-Productos más vendidos por categoría.
-
-Ranking de clientes por gasto total.
-
-4\. Optimización con índices ESR
-
-
+### 4. Optimización con índices ESR
 
 Crea índices compuestos y multikey para consultas críticas.
 
-
-
-python src/optimization\_indexes.py
-
-
+```bash
+python src/optimization_indexes.py
+```
 
 Índices principales:
 
-
-
+```js
 db.products.createIndex({ category: 1, status: 1, price: -1 })
-
 db.products.createIndex({ "specs.k": 1, "specs.v": 1 })
+db.orders.createIndex({ user_email: 1, created_at: -1 })
+db.orders.createIndex({ status: 1, created_at: 1 })
+db.payments.createIndex({ order_id: 1 })
+db.inventory_movements.createIndex({ product_id: 1, created_at: -1 })
+```
 
-db.orders.createIndex({ user\_email: 1, created\_at: -1 })
+---
 
-db.orders.createIndex({ status: 1, created\_at: 1 })
-
-db.payments.createIndex({ order\_id: 1 })
-
-db.inventory\_movements.createIndex({ product\_id: 1, created\_at: -1 })
-
-5\. Transacción de checkout
-
-
+### 5. Transacción de checkout
 
 Implementa una transacción multi-documento en MongoDB.
 
-
-
-python src/checkout\_transaction.py
-
-
+```bash
+python src/checkout_transaction.py
+```
 
 El proceso de checkout incluye:
 
+- validación de usuario;
+- validación de stock;
+- creación de orden;
+- creación de pago;
+- descuento de stock;
+- registro de movimientos de inventario;
+- actualización de vista materializada.
 
+---
 
-validación de usuario;
-
-validación de stock;
-
-creación de orden;
-
-creación de pago;
-
-descuento de stock;
-
-registro de movimientos de inventario;
-
-actualización de vista materializada.
-
-6\. Estructuras Redis
-
-
+### 6. Estructuras Redis
 
 Implementa distintas estructuras de datos en Redis.
 
-
-
-python src/redis\_structures.py
-
-
+```bash
+python src/redis_structures.py
+```
 
 Estructuras utilizadas:
 
+- Hashes para sesiones y carritos activos.
+- Sorted Sets para ranking de productos más vistos.
+- Lists para eventos recientes.
 
+---
 
-Hashes para sesiones y carritos activos.
-
-Sorted Sets para ranking de productos más vistos.
-
-Lists para eventos recientes.
-
-7\. Gestión de caché con Redis
-
-
+### 7. Gestión de caché con Redis
 
 Implementa TTL e invalidación de caché.
 
-
-
-python src/redis\_cache\_policy.py
-
-
+```bash
+python src/redis_cache_policy.py
+```
 
 Políticas aplicadas:
 
+- sesiones con TTL de 30 minutos;
+- carritos con TTL de 1 hora;
+- ranking de productos con TTL de 1 hora;
+- invalidación del carrito después del checkout;
+- invalidación de sesión al cerrar sesión.
 
+---
 
-sesiones con TTL de 30 minutos;
+## Decisiones técnicas principales
 
-carritos con TTL de 1 hora;
-
-ranking de productos con TTL de 1 hora;
-
-invalidación del carrito después del checkout;
-
-invalidación de sesión al cerrar sesión.
-
-Decisiones técnicas principales
-
-MongoDB como fuente de verdad
-
-
+### MongoDB como fuente de verdad
 
 MongoDB almacena los datos persistentes y críticos del sistema: usuarios, productos, órdenes, pagos e inventario.
 
-
-
-Redis como capa de velocidad
-
-
+### Redis como capa de velocidad
 
 Redis se utiliza para datos temporales o de alta frecuencia, evitando sobrecargar MongoDB con operaciones volátiles.
 
+### Prioridad CP para operaciones críticas
 
+El sistema prioriza **consistencia** y **tolerancia a particiones** en el checkout, pagos e inventario. Ante una partición de red, se prefiere rechazar temporalmente una compra antes que permitir inconsistencias de stock o pagos.
 
-Prioridad CP para operaciones críticas
+### Sharding propuesto
 
+Para la colección `orders`, se propone la shard key:
 
+```js
+{ user_id: "hashed" }
+```
 
-El sistema prioriza consistencia y tolerancia a particiones en el checkout, pagos e inventario. Ante una partición de red, se prefiere rechazar temporalmente una compra antes que permitir inconsistencias de stock o pagos.
+Esta clave permite distribuir las órdenes entre shards y evitar hotspots generados por campos secuenciales como `created_at` u `order_number`.
 
+---
 
+## Repositorio
 
-Sharding propuesto
+https://github.com/agustinpena20/ecommerce-nosql-mongodb-redis
 
+## Integrantes
 
-
-Para la colección orders, se propone la shard key:
-
-
-
-{ user\_id: "hashed" }
-
-
-
-Esta clave permite distribuir las órdenes entre shards y evitar hotspots generados por campos secuenciales como created\_at u order\_number.
-
-
-
-Integrantes
-
-Agustín Peña
-
-Matías Roberti
-
+- Agustín Peña
+- Matías Roberti
