@@ -139,7 +139,7 @@ Resultado esperado del seed:
 - 24 productos electrónicos
 - 48 órdenes
 - 48 pagos
-- 85 movimientos de inventario
+- 109 movimientos de inventario
 - 11 días con ventas agregadas
 
 El seed genera múltiples órdenes por día para simular un comportamiento más realista de un e-commerce.

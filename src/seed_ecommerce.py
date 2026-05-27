@@ -304,6 +304,70 @@ def create_orders_payments_movements(users, products):
     return orders, payments, inventory_movements
 
 
+def create_extra_inventory_movements(products):
+    """
+    Agrega movimientos de inventario adicionales para que la colección
+    inventory_movements sea más realista.
+
+    Además de las ventas generadas por checkout, un e-commerce real
+    también tiene reposiciones, ajustes manuales y devoluciones.
+    """
+
+    products_by_sku = {p["sku"]: p for p in products}
+
+    extra_movements_plan = [
+        # Reposiciones de stock por proveedor
+        ("ELEC-COMPUTER", "restock", 10, "supplier_delivery", "2026-05-09T08:00:00Z"),
+        ("ELEC-PHONE", "restock", 15, "supplier_delivery", "2026-05-09T08:15:00Z"),
+        ("ELEC-MOUSE", "restock", 30, "supplier_delivery", "2026-05-09T08:30:00Z"),
+        ("ELEC-KEYBOARD", "restock", 25, "supplier_delivery", "2026-05-09T08:45:00Z"),
+        ("ELEC-MONITOR", "restock", 12, "supplier_delivery", "2026-05-09T09:00:00Z"),
+
+        # Ajustes manuales de inventario
+        ("ELEC-HDMI", "adjustment", -2, "inventory_correction", "2026-05-12T18:00:00Z"),
+        ("ELEC-HEADPHONES", "adjustment", -1, "damaged_item", "2026-05-13T16:30:00Z"),
+
+        # Devoluciones de clientes
+        ("ELEC-MOUSE", "return", 1, "customer_return", "2026-05-15T11:20:00Z"),
+        ("ELEC-KEYBOARD", "return", 1, "customer_return", "2026-05-16T14:10:00Z"),
+    ]
+
+    extra_movements = []
+
+    for sku, movement_type, quantity, reason, date_str in extra_movements_plan:
+        product = products_by_sku.get(sku)
+
+        if not product:
+            print(f"Producto no encontrado para movimiento extra: {sku}")
+            continue
+
+        created_at = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+
+        movement = {
+            "_id": ObjectId(),
+            "product_id": product["_id"],
+            "order_id": None,
+            "movement_type": movement_type,
+            "quantity": quantity,
+            "reason": reason,
+            "created_at": created_at
+        }
+
+        extra_movements.append(movement)
+
+        db.products.update_one(
+            {"_id": product["_id"]},
+            {"$inc": {"stock": quantity}}
+        )
+
+    if extra_movements:
+        db.inventory_movements.insert_many(extra_movements)
+
+    print(f"Movimientos extra de inventario insertados: {len(extra_movements)}")
+
+    return extra_movements
+
+
 def create_daily_sales(orders):
     """
     Genera la colección daily_sales a partir de las órdenes pagadas.
@@ -376,6 +440,9 @@ if __name__ == "__main__":
     users = create_users()
     products = create_products()
     orders, payments, movements = create_orders_payments_movements(users, products)
+
+    extra_movements = create_extra_inventory_movements(products)
+
     daily_sales = create_daily_sales(orders)
     create_indexes()
     validate_seed()
