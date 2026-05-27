@@ -10,10 +10,6 @@ from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from pprint import pprint
 
 
-# ============================================================
-# 1. CONFIGURACIÓN DE CONEXIÓN
-# ============================================================
-
 MONGO_URI = "mongodb://localhost:27017/?replicaSet=rs0"
 DB_NAME = "ecommerce_tp"
 
@@ -36,25 +32,14 @@ def get_database():
         return None
 
 
-# ============================================================
-# 2. CREACIÓN DE ÍNDICES
-# ============================================================
-
 def create_indexes(db):
     """
-    Crea los índices necesarios para optimizar las consultas críticas
-    del e-commerce siguiendo la regla ESR.
+    Crea los índices necesarios para optimizar consultas críticas
+    siguiendo la regla ESR.
     """
 
     print("\n========== CREACIÓN DE ÍNDICES ==========")
 
-    # --------------------------------------------------------
-    # Índice 1 — Catálogo por categoría, estado y precio
-    # ESR:
-    # category = Equality
-    # status   = Equality
-    # price    = Sort
-    # --------------------------------------------------------
     idx1 = db.products.create_index([
         ("category", ASCENDING),
         ("status", ASCENDING),
@@ -62,65 +47,35 @@ def create_indexes(db):
     ])
     print("Índice creado en products:", idx1)
 
-    # --------------------------------------------------------
-    # Índice 2 — Attribute Pattern
-    # Permite buscar productos por atributos variables:
-    # specs.k + specs.v
-    # --------------------------------------------------------
     idx2 = db.products.create_index([
         ("specs.k", ASCENDING),
         ("specs.v", ASCENDING)
     ])
     print("Índice creado en products:", idx2)
 
-    # --------------------------------------------------------
-    # Índice 3 — Historial de órdenes por usuario
-    # ESR:
-    # user_email = Equality
-    # created_at = Sort
-    # --------------------------------------------------------
     idx3 = db.orders.create_index([
         ("user_email", ASCENDING),
         ("created_at", DESCENDING)
     ])
     print("Índice creado en orders:", idx3)
 
-    # --------------------------------------------------------
-    # Índice 4 — Órdenes pagadas por rango de fechas
-    # ESR:
-    # status     = Equality
-    # created_at = Range
-    # --------------------------------------------------------
     idx4 = db.orders.create_index([
         ("status", ASCENDING),
         ("created_at", ASCENDING)
     ])
     print("Índice creado en orders:", idx4)
 
-    # --------------------------------------------------------
-    # Índice 5 — Pago asociado a una orden
-    # --------------------------------------------------------
     idx5 = db.payments.create_index([
         ("order_id", ASCENDING)
     ])
     print("Índice creado en payments:", idx5)
 
-    # --------------------------------------------------------
-    # Índice 6 — Movimientos de inventario por producto
-    # ESR:
-    # product_id = Equality
-    # created_at = Sort
-    # --------------------------------------------------------
     idx6 = db.inventory_movements.create_index([
         ("product_id", ASCENDING),
         ("created_at", DESCENDING)
     ])
     print("Índice creado en inventory_movements:", idx6)
 
-
-# ============================================================
-# 3. VALIDACIÓN DE ÍNDICES
-# ============================================================
 
 def show_indexes(db):
     """
@@ -140,17 +95,12 @@ def show_indexes(db):
     pprint(list(db.inventory_movements.list_indexes()))
 
 
-# ============================================================
-# 4. CONSULTAS CRÍTICAS DE PRUEBA
-# ============================================================
-
 def run_critical_queries(db):
     """
-    Ejecuta consultas críticas para validar que los índices
-    responden a los casos de uso principales.
+    Ejecuta consultas críticas para validar los índices.
     """
 
-    print("\n========== CONSULTA 1: CATÁLOGO POR CATEGORÍA Y PRECIO ==========")
+    print("\n========== CONSULTA 1: CATÁLOGO ELECTRÓNICO POR PRECIO ==========")
 
     products = db.products.find(
         {
@@ -161,7 +111,7 @@ def run_critical_queries(db):
             "_id": 0,
             "sku": 1,
             "name": 1,
-            "category": 1,
+            "subcategory": 1,
             "price": 1,
             "stock": 1
         }
@@ -175,6 +125,7 @@ def run_critical_queries(db):
 
     specs_products = db.products.find(
         {
+            "category": "electronics",
             "specs.k": "ram",
             "specs.v": "16GB"
         },
@@ -182,6 +133,7 @@ def run_critical_queries(db):
             "_id": 0,
             "sku": 1,
             "name": 1,
+            "subcategory": 1,
             "brand": 1,
             "specs": 1
         }
@@ -210,17 +162,12 @@ def run_critical_queries(db):
         pprint(order)
 
 
-# ============================================================
-# 5. EXPLAIN PLAN
-# ============================================================
-
 def explain_catalog_query(db):
     """
-    Ejecuta explain usando db.command(), que a veces evita errores
-    de decodificación del cursor explain() en algunos entornos.
+    Ejecuta explain usando db.command().
     """
 
-    print("\n========== EXPLAIN: CONSULTA DE CATÁLOGO ==========")
+    print("\n========== EXPLAIN: CONSULTA DE CATÁLOGO ELECTRÓNICO ==========")
 
     explain_result = db.command({
         "explain": {
@@ -241,7 +188,6 @@ def explain_catalog_query(db):
         "verbosity": "executionStats"
     })
 
-    query_planner = explain_result.get("queryPlanner", {})
     execution_stats = explain_result.get("executionStats", {})
 
     print("Índice esperado: category_1_status_1_price_-1")
@@ -249,13 +195,6 @@ def explain_catalog_query(db):
     print("totalDocsExamined:", execution_stats.get("totalDocsExamined"))
     print("totalKeysExamined:", execution_stats.get("totalKeysExamined"))
 
-    print("\nPlan ganador:")
-    print(query_planner.get("winningPlan"))
-
-
-# ============================================================
-# 6. PROGRAMA PRINCIPAL
-# ============================================================
 
 if __name__ == "__main__":
 
@@ -266,8 +205,7 @@ if __name__ == "__main__":
         show_indexes(db)
         run_critical_queries(db)
 
-        # En este entorno local, explain() genera un error BSON/UTF-8.
-        # Los índices y consultas ya fueron validados funcionalmente.
+        # Si en tu entorno explain no da error, podés descomentar:
         # explain_catalog_query(db)
 
         print("\nOptimización con índices ejecutada correctamente.")

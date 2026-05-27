@@ -13,10 +13,6 @@ from decimal import Decimal
 from datetime import datetime, timezone
 
 
-# ============================================================
-# 1. CONFIGURACIÓN DE CONEXIÓN
-# ============================================================
-
 MONGO_URI = "mongodb://localhost:27017/?replicaSet=rs0"
 DB_NAME = "ecommerce_tp"
 
@@ -39,10 +35,6 @@ def get_database():
         return None, None
 
 
-# ============================================================
-# 2. FUNCIONES AUXILIARES
-# ============================================================
-
 def decimal128_to_decimal(value):
     """
     Convierte Decimal128 de MongoDB a Decimal de Python.
@@ -62,27 +54,17 @@ def generate_order_number(db, session):
     return f"ORD-2026-{count + 1:06d}"
 
 
-# ============================================================
-# 3. CHECKOUT CON TRANSACCIÓN
-# ============================================================
-
 def checkout_order(db, user_email, cart_items, payment_method, provider):
     """
     Ejecuta el checkout de una compra utilizando una transacción ACID.
 
-    Parámetros:
-    - user_email: email del usuario que compra.
-    - cart_items: lista de productos con sku y cantidad.
-    - payment_method: método de pago.
-    - provider: proveedor del pago.
-
-    Operaciones incluidas en la transacción:
+    Operaciones incluidas:
     1. Validar usuario.
-    2. Validar productos y stock.
-    3. Descontar stock.
-    4. Crear orden.
-    5. Crear pago.
-    6. Registrar movimientos de inventario.
+    2. Validar productos electrónicos y stock.
+    3. Crear orden.
+    4. Descontar stock.
+    5. Registrar movimientos de inventario.
+    6. Crear pago.
     7. Actualizar daily_sales.
     """
 
@@ -93,9 +75,6 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
         try:
             with session.start_transaction():
 
-                # ------------------------------------------------
-                # 1. Validar usuario
-                # ------------------------------------------------
                 user = db.users.find_one(
                     {"email": user_email, "status": "active"},
                     session=session
@@ -105,10 +84,6 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
                     raise Exception(f"Usuario no encontrado o inactivo: {user_email}")
 
                 user_id = user["_id"]
-
-                # ------------------------------------------------
-                # 2. Validar carrito y productos
-                # ------------------------------------------------
                 order_items = []
                 total_amount = Decimal("0.00")
 
@@ -118,12 +93,12 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
                     quantity = int(item["quantity"])
 
                     product = db.products.find_one(
-                        {"sku": sku, "status": "active"},
+                        {"sku": sku, "status": "active", "category": "electronics"},
                         session=session
                     )
 
                     if not product:
-                        raise Exception(f"Producto no encontrado o inactivo: {sku}")
+                        raise Exception(f"Producto electrónico no encontrado o inactivo: {sku}")
 
                     if product["stock"] < quantity:
                         raise Exception(
@@ -140,14 +115,12 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
                         "sku": product["sku"],
                         "name": product["name"],
                         "category": product["category"],
+                        "subcategory": product["subcategory"],
                         "quantity": quantity,
                         "unit_price": Decimal128(str(unit_price)),
                         "subtotal": Decimal128(str(subtotal))
                     })
 
-                # ------------------------------------------------
-                # 3. Crear orden
-                # ------------------------------------------------
                 now = datetime.now(timezone.utc)
                 order_id = ObjectId()
                 order_number = generate_order_number(db, session)
@@ -168,9 +141,6 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
 
                 db.orders.insert_one(order_doc, session=session)
 
-                # ------------------------------------------------
-                # 4. Descontar stock y registrar movimientos
-                # ------------------------------------------------
                 inventory_movements = []
 
                 for item in order_items:
@@ -188,9 +158,7 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
                     )
 
                     if update_result.modified_count != 1:
-                        raise Exception(
-                            f"No se pudo descontar stock para {item['sku']}"
-                        )
+                        raise Exception(f"No se pudo descontar stock para {item['sku']}")
 
                     inventory_movements.append({
                         "_id": ObjectId(),
@@ -207,9 +175,6 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
                     session=session
                 )
 
-                # ------------------------------------------------
-                # 5. Crear pago asociado
-                # ------------------------------------------------
                 payment_doc = {
                     "_id": ObjectId(),
                     "order_id": order_id,
@@ -225,32 +190,28 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
 
                 db.payments.insert_one(payment_doc, session=session)
 
-                # ------------------------------------------------
-                # 6. Actualizar vista materializada daily_sales
-                # ------------------------------------------------
                 day_key = now.strftime("%Y-%m-%d")
-                day_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
 
                 db.daily_sales.update_one(
-                    {"_id": day_key},
+                    {"date": day_key},
                     {
-                        "$setOnInsert": {
-                            "date": day_start,
-                            "by_category": []
-                        },
                         "$inc": {
                             "total_orders": 1,
                             "total_revenue": Decimal128(str(total_amount))
                         },
                         "$set": {
+                            "currency": "USD",
                             "updated_at": now
+                        },
+                        "$setOnInsert": {
+                            "_id": ObjectId(),
+                            "date": day_key
                         }
                     },
                     upsert=True,
                     session=session
                 )
 
-                # Si todo salió bien, la transacción se confirma automáticamente.
                 print("\nCheckout ejecutado correctamente.")
                 print("Orden creada:", order_number)
                 print("Usuario:", user_email)
@@ -270,15 +231,9 @@ def checkout_order(db, user_email, cart_items, payment_method, provider):
             print("Detalle:", error)
 
 
-# ============================================================
-# 4. VALIDACIÓN POST-CHECKOUT
-# ============================================================
-
 def validate_checkout(db, order_id):
     """
     Muestra la orden, el pago y los movimientos de inventario generados.
-    Sirve para validar que la transacción impactó correctamente en todas
-    las colecciones involucradas.
     """
 
     if order_id is None:
@@ -316,21 +271,16 @@ def validate_checkout(db, order_id):
         })
 
 
-# ============================================================
-# 5. PROGRAMA PRINCIPAL
-# ============================================================
-
 if __name__ == "__main__":
 
     client, db = get_database()
 
     if db is not None:
 
-        # Carrito de ejemplo.
-        # Más adelante este carrito podrá provenir de Redis.
+        # Carrito de ejemplo con productos electrónicos simples.
         cart = [
-            {"sku": "MOUSE-LOGI-MX", "quantity": 1},
-            {"sku": "KEY-MECH-RED", "quantity": 1}
+            {"sku": "ELEC-MOUSE", "quantity": 1},
+            {"sku": "ELEC-KEYBOARD", "quantity": 1}
         ]
 
         order_id = checkout_order(

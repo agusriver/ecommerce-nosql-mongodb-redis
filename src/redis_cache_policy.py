@@ -5,31 +5,19 @@
 # Objetivo:
 # - Implementar políticas de expiración con TTL.
 # - Implementar invalidación coherente con el negocio.
-#
-# Estructuras:
-# - Hash para sesiones.
-# - Hash para carritos activos.
-# - Sorted Set para ranking de productos vistos.
-# - List para eventos recientes.
 # ============================================================
 
 import redis
 from datetime import datetime
 
 
-# ============================================================
-# 1. CONFIGURACIÓN DE REDIS
-# ============================================================
-
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 REDIS_DB = 0
 
-
-# TTL definidos en segundos
-SESSION_TTL_SECONDS = 30 * 60       # 30 minutos
-CART_TTL_SECONDS = 60 * 60          # 1 hora
-TOP_PRODUCTS_TTL_SECONDS = 60 * 60  # 1 hora
+SESSION_TTL_SECONDS = 30 * 60
+CART_TTL_SECONDS = 60 * 60
+TOP_PRODUCTS_TTL_SECONDS = 60 * 60
 
 MAX_RECENT_EVENTS = 20
 
@@ -37,8 +25,6 @@ MAX_RECENT_EVENTS = 20
 def get_redis_client():
     """
     Crea y valida la conexión con Redis.
-    decode_responses=True permite trabajar con strings normales
-    en lugar de bytes.
     """
 
     client = redis.Redis(
@@ -59,20 +45,9 @@ def get_redis_client():
         return None
 
 
-# ============================================================
-# 2. SESIONES CON TTL
-# ============================================================
-
 def create_session(r, user_email):
     """
     Crea una sesión de usuario como Hash en Redis.
-
-    Clave:
-    session:{user_email}
-
-    Política:
-    - TTL de 30 minutos.
-    - Si el usuario no tiene actividad, la sesión expira.
     """
 
     key = f"session:{user_email}"
@@ -93,9 +68,6 @@ def create_session(r, user_email):
 def refresh_session(r, user_email):
     """
     Refresca la sesión ante actividad del usuario.
-
-    Cada vez que el usuario interactúa con la plataforma,
-    se actualiza last_activity y se renueva el TTL.
     """
 
     key = f"session:{user_email}"
@@ -113,14 +85,9 @@ def refresh_session(r, user_email):
 def invalidate_session(r, user_email):
     """
     Invalida la sesión del usuario.
-
-    Caso de negocio:
-    - El usuario cierra sesión.
-    - La sesión debe eliminarse inmediatamente.
     """
 
     key = f"session:{user_email}"
-
     deleted = r.delete(key)
 
     if deleted:
@@ -129,20 +96,9 @@ def invalidate_session(r, user_email):
         print(f"No existía sesión para invalidar: {key}")
 
 
-# ============================================================
-# 3. CARRITO ACTIVO CON TTL
-# ============================================================
-
 def add_to_cart(r, user_email, sku, quantity):
     """
-    Agrega productos al carrito activo.
-
-    Clave:
-    cart:{user_email}
-
-    Política:
-    - TTL de 1 hora.
-    - Cada modificación del carrito renueva el TTL.
+    Agrega productos electrónicos al carrito activo.
     """
 
     key = f"cart:{user_email}"
@@ -170,15 +126,9 @@ def get_cart(r, user_email):
 def invalidate_cart_after_checkout(r, user_email):
     """
     Invalida el carrito luego de un checkout exitoso.
-
-    Caso de negocio:
-    - El usuario confirma la compra.
-    - La orden se persiste en MongoDB.
-    - El carrito temporal ya no debe existir en Redis.
     """
 
     key = f"cart:{user_email}"
-
     deleted = r.delete(key)
 
     if deleted:
@@ -187,20 +137,9 @@ def invalidate_cart_after_checkout(r, user_email):
         print(f"No existía carrito para invalidar: {key}")
 
 
-# ============================================================
-# 4. RANKING DE PRODUCTOS CON TTL
-# ============================================================
-
 def register_product_view(r, sku):
     """
-    Registra una visualización de producto.
-
-    Clave:
-    top_products:last_hour
-
-    Política:
-    - TTL de 1 hora.
-    - Representa popularidad reciente.
+    Registra una visualización de producto electrónico.
     """
 
     key = "top_products:last_hour"
@@ -214,11 +153,10 @@ def register_product_view(r, sku):
 
 def get_top_products(r):
     """
-    Consulta ranking de productos más vistos.
+    Consulta ranking de productos electrónicos más vistos.
     """
 
     key = "top_products:last_hour"
-
     ranking = r.zrevrange(key, 0, 9, withscores=True)
 
     print("\n========== TOP PRODUCTS LAST HOUR ==========")
@@ -229,21 +167,9 @@ def get_top_products(r):
     print(f"TTL ranking: {r.ttl(key)} segundos")
 
 
-# ============================================================
-# 5. EVENTOS RECIENTES CON LIST + TRIM
-# ============================================================
-
 def register_recent_event(r, event):
     """
     Registra un evento reciente del sistema.
-
-    Clave:
-    recent_events
-
-    Política:
-    - No se usa TTL principal.
-    - Se usa LTRIM para evitar crecimiento indefinido.
-    - Se conservan solo los últimos MAX_RECENT_EVENTS eventos.
     """
 
     key = "recent_events"
@@ -271,10 +197,6 @@ def get_recent_events(r):
     print(f"Cantidad actual de eventos guardados: {r.llen(key)}")
 
 
-# ============================================================
-# 6. PROGRAMA PRINCIPAL
-# ============================================================
-
 if __name__ == "__main__":
 
     r = get_redis_client()
@@ -283,7 +205,6 @@ if __name__ == "__main__":
 
         user_email = "agustin@example.com"
 
-        # Limpiamos claves de prueba para ejecutar el script varias veces
         r.delete(
             f"session:{user_email}",
             f"cart:{user_email}",
@@ -296,30 +217,26 @@ if __name__ == "__main__":
         refresh_session(r, user_email)
 
         print("\n========== 2. CARRITO CON TTL ==========")
-        add_to_cart(r, user_email, "NOTE-THINK-X1", 1)
-        add_to_cart(r, user_email, "MOUSE-LOGI-MX", 2)
+        add_to_cart(r, user_email, "ELEC-COMPUTER", 1)
+        add_to_cart(r, user_email, "ELEC-MOUSE", 2)
         get_cart(r, user_email)
 
         print("\n========== 3. RANKING CON TTL ==========")
-        register_product_view(r, "NOTE-THINK-X1")
-        register_product_view(r, "NOTE-THINK-X1")
-        register_product_view(r, "PHONE-SAMSUNG-S24")
-        register_product_view(r, "MOUSE-LOGI-MX")
+        register_product_view(r, "ELEC-COMPUTER")
+        register_product_view(r, "ELEC-COMPUTER")
+        register_product_view(r, "ELEC-PHONE")
+        register_product_view(r, "ELEC-MOUSE")
         get_top_products(r)
 
         print("\n========== 4. EVENTOS RECIENTES ==========")
         register_recent_event(r, f"{user_email} inició sesión")
-        register_recent_event(r, f"{user_email} agregó NOTE-THINK-X1 al carrito")
-        register_recent_event(r, f"{user_email} agregó MOUSE-LOGI-MX al carrito")
+        register_recent_event(r, f"{user_email} agregó ELEC-COMPUTER al carrito")
+        register_recent_event(r, f"{user_email} agregó ELEC-MOUSE al carrito")
         register_recent_event(r, f"{user_email} consultó top_products:last_hour")
         get_recent_events(r)
 
         print("\n========== 5. INVALIDACIÓN POR NEGOCIO ==========")
-
-        # Caso de negocio: checkout exitoso
         invalidate_cart_after_checkout(r, user_email)
-
-        # Caso de negocio: logout
         invalidate_session(r, user_email)
 
         print("\n========== VALIDACIÓN FINAL ==========")

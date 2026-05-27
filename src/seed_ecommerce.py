@@ -1,507 +1,383 @@
 # ============================================================
-# SEED INICIAL — TP E-commerce de Alto Rendimiento
-# MongoDB + Redis
-# Base de datos: ecommerce_tp
-# Driver: PyMongo
+# SEED — E-COMMERCE NoSQL
+# Proyecto: Trabajo Práctico Integrador
+#
+# Objetivo:
+# - Poblar MongoDB con datos realistas para defensa académica.
+# - Trabajar solamente con productos electrónicos.
+# - Usar nombres simples de productos para que la defensa sea clara.
+# - Generar múltiples órdenes por día, pagos, movimientos de inventario
+#   y ventas diarias agregadas.
 # ============================================================
 
 from pymongo import MongoClient
 from bson import ObjectId, Decimal128
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from collections import defaultdict
 
 
-# ============================================================
-# 1. CONEXIÓN A MONGODB
-# ============================================================
+MONGO_URI = "mongodb://localhost:27017/?replicaSet=rs0"
+DB_NAME = "ecommerce_tp"
 
-# Conexión local a MongoDB.
-# En MongoDB Compass normalmente usamos mongodb://localhost:27017
-client = MongoClient("mongodb://localhost:27017/?replicaSet=rs0")
-
-# Seleccionamos la base de datos del TP.
-db = client["ecommerce_tp"]
+client = MongoClient(MONGO_URI)
+db = client[DB_NAME]
 
 
-# ============================================================
-# 2. LIMPIEZA DE COLECCIONES
-# ============================================================
+def reset_database():
+    """
+    Limpia las colecciones principales para evitar duplicados
+    al ejecutar el seed varias veces.
+    """
 
-# Borramos datos previos para poder ejecutar el seed varias veces
-# sin duplicar información.
-collections = [
-    "users",
-    "products",
-    "orders",
-    "payments",
-    "inventory_movements",
-    "daily_sales"
-]
+    collections = [
+        "users",
+        "products",
+        "orders",
+        "payments",
+        "inventory_movements",
+        "daily_sales"
+    ]
 
-for collection in collections:
-    db[collection].delete_many({})
+    for collection in collections:
+        db[collection].delete_many({})
 
-print("Base ecommerce_tp limpiada correctamente.")
-
-
-# ============================================================
-# 3. CARGA DE USUARIOS
-# ============================================================
-
-users = [
-    {
-        "_id": ObjectId(),
-        "name": "Agustín Peña",
-        "email": "agustin@example.com",
-        "status": "active",
-        "created_at": datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
-        "default_address": {
-            "street": "Av. Corrientes 1500",
-            "city": "Buenos Aires",
-            "country": "Argentina",
-            "zip_code": "C1042"
-        }
-    },
-    {
-        "_id": ObjectId(),
-        "name": "Lucía Fernández",
-        "email": "lucia@example.com",
-        "status": "active",
-        "created_at": datetime(2026, 5, 2, 11, 30, tzinfo=timezone.utc),
-        "default_address": {
-            "street": "Av. Santa Fe 2500",
-            "city": "Buenos Aires",
-            "country": "Argentina",
-            "zip_code": "C1425"
-        }
-    },
-    {
-        "_id": ObjectId(),
-        "name": "Mateo Rodríguez",
-        "email": "mateo@example.com",
-        "status": "active",
-        "created_at": datetime(2026, 5, 3, 9, 15, tzinfo=timezone.utc),
-        "default_address": {
-            "street": "Bv. Oroño 900",
-            "city": "Rosario",
-            "country": "Argentina",
-            "zip_code": "S2000"
-        }
-    },
-    {
-        "_id": ObjectId(),
-        "name": "Sofía Lann",
-        "email": "sofia@example.com",
-        "status": "inactive",
-        "created_at": datetime(2026, 5, 4, 16, 45, tzinfo=timezone.utc),
-        "default_address": {
-            "street": "San Martín 120",
-            "city": "Córdoba",
-            "country": "Argentina",
-            "zip_code": "X5000"
-        }
-    }
-]
-
-db.users.insert_many(users)
-
-agustin_id = users[0]["_id"]
-lucia_id = users[1]["_id"]
-mateo_id = users[2]["_id"]
-sofia_id = users[3]["_id"]
-
-print("Usuarios insertados:", db.users.count_documents({}))
+    print("Base ecommerce_tp limpiada correctamente.")
 
 
-# ============================================================
-# 4. CARGA DE PRODUCTOS
-# ============================================================
-# En products aplicamos Attribute Pattern.
-# Las características variables se guardan en specs como pares {k, v}.
+def create_users():
+    """
+    Crea usuarios de prueba con direcciones embebidas.
+    """
 
-products = [
-    {
-        "_id": ObjectId(),
-        "sku": "NOTE-THINK-X1",
-        "name": "Lenovo ThinkPad X1",
-        "category": "electronics",
-        "subcategory": "laptops",
-        "brand": "Lenovo",
-        "status": "active",
-        "price": Decimal128("1299.99"),
-        "currency": "USD",
-        "stock": 42,
-        "specs": [
-            {"k": "ram", "v": "16GB"},
-            {"k": "cpu", "v": "Intel i7"},
-            {"k": "storage", "v": "512GB SSD"},
-            {"k": "screen", "v": "14 inch"}
-        ],
-        "created_at": datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
-        "updated_at": datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "sku": "MOUSE-LOGI-MX",
-        "name": "Mouse Logitech MX Master",
-        "category": "electronics",
-        "subcategory": "accessories",
-        "brand": "Logitech",
-        "status": "active",
-        "price": Decimal128("85.00"),
-        "currency": "USD",
-        "stock": 120,
-        "specs": [
-            {"k": "connection", "v": "Bluetooth"},
-            {"k": "dpi", "v": "8000"},
-            {"k": "color", "v": "black"}
-        ],
-        "created_at": datetime(2026, 5, 1, 10, 10, tzinfo=timezone.utc),
-        "updated_at": datetime(2026, 5, 1, 10, 10, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "sku": "KEY-MECH-RED",
-        "name": "Teclado Mecánico Redragon",
-        "category": "electronics",
-        "subcategory": "keyboards",
-        "brand": "Redragon",
-        "status": "active",
-        "price": Decimal128("50.00"),
-        "currency": "USD",
-        "stock": 75,
-        "specs": [
-            {"k": "switch", "v": "red"},
-            {"k": "layout", "v": "QWERTY"},
-            {"k": "backlight", "v": "RGB"}
-        ],
-        "created_at": datetime(2026, 5, 1, 10, 20, tzinfo=timezone.utc),
-        "updated_at": datetime(2026, 5, 1, 10, 20, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "sku": "MON-24-SAMSUNG",
-        "name": "Monitor Samsung 24 pulgadas",
-        "category": "electronics",
-        "subcategory": "monitors",
-        "brand": "Samsung",
-        "status": "active",
-        "price": Decimal128("150.00"),
-        "currency": "USD",
-        "stock": 60,
-        "specs": [
-            {"k": "size", "v": "24 inch"},
-            {"k": "resolution", "v": "Full HD"},
-            {"k": "refresh_rate", "v": "75Hz"}
-        ],
-        "created_at": datetime(2026, 5, 2, 9, 0, tzinfo=timezone.utc),
-        "updated_at": datetime(2026, 5, 2, 9, 0, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "sku": "TSHIRT-UCA-BLUE",
-        "name": "Remera UCA Azul",
-        "category": "apparel",
-        "subcategory": "tshirts",
-        "brand": "UCA Store",
-        "status": "active",
-        "price": Decimal128("25.00"),
-        "currency": "USD",
-        "stock": 200,
-        "specs": [
-            {"k": "size", "v": "M"},
-            {"k": "color", "v": "blue"},
-            {"k": "fabric", "v": "cotton"}
-        ],
-        "created_at": datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc),
-        "updated_at": datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "sku": "PHONE-SAMSUNG-S24",
-        "name": "Samsung Galaxy S24",
-        "category": "electronics",
-        "subcategory": "smartphones",
-        "brand": "Samsung",
-        "status": "active",
-        "price": Decimal128("899.99"),
-        "currency": "USD",
-        "stock": 30,
-        "specs": [
-            {"k": "storage", "v": "256GB"},
-            {"k": "camera", "v": "50MP"},
-            {"k": "battery", "v": "4000mAh"}
-        ],
-        "created_at": datetime(2026, 5, 3, 8, 0, tzinfo=timezone.utc),
-        "updated_at": datetime(2026, 5, 3, 8, 0, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "sku": "HEAD-SONY-XM5",
-        "name": "Sony WH-1000XM5",
-        "category": "electronics",
-        "subcategory": "headphones",
-        "brand": "Sony",
-        "status": "active",
-        "price": Decimal128("399.99"),
-        "currency": "USD",
-        "stock": 15,
-        "specs": [
-            {"k": "noise_cancelling", "v": "true"},
-            {"k": "connection", "v": "Bluetooth"},
-            {"k": "battery_life", "v": "30h"}
-        ],
-        "created_at": datetime(2026, 5, 4, 8, 0, tzinfo=timezone.utc),
-        "updated_at": datetime(2026, 5, 4, 8, 0, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "sku": "OLD-CAMERA-001",
-        "name": "Cámara Digital Antigua",
-        "category": "electronics",
-        "subcategory": "cameras",
-        "brand": "Generic",
-        "status": "discontinued",
-        "price": Decimal128("120.00"),
-        "currency": "USD",
-        "stock": 0,
-        "specs": [
-            {"k": "resolution", "v": "12MP"},
-            {"k": "storage", "v": "SD Card"}
-        ],
-        "created_at": datetime(2026, 4, 1, 8, 0, tzinfo=timezone.utc),
-        "updated_at": datetime(2026, 4, 15, 8, 0, tzinfo=timezone.utc)
-    }
-]
+    users_data = [
+        ("Agustín Peña", "agustin@example.com", "Buenos Aires", "Av. Corrientes 1500", "C1042"),
+        ("Lucía Gómez", "lucia@example.com", "Buenos Aires", "Av. Santa Fe 2500", "C1425"),
+        ("Mateo Rodríguez", "mateo@example.com", "Rosario", "Bv. Oroño 900", "S2000"),
+        ("Sofía Martínez", "sofia@example.com", "Córdoba", "Colón 400", "X5000"),
+        ("Tomás Fernández", "tomas@example.com", "Mendoza", "San Martín 700", "M5500"),
+        ("Camila Suárez", "camila@example.com", "La Plata", "Mitre 350", "B1900"),
+        ("Juan Pérez", "juan@example.com", "Buenos Aires", "Rivadavia 1100", "C1033"),
+        ("Valentina Ruiz", "valentina@example.com", "Mar del Plata", "Belgrano 800", "B7600"),
+        ("Nicolás Torres", "nicolas@example.com", "Salta", "Independencia 120", "A4400"),
+        ("Martina López", "martina@example.com", "Tucumán", "Sarmiento 500", "T4000"),
+        ("Pedro Naón", "pedro@example.com", "Pilar", "Panamericana Km 50", "B1629"),
+        ("Matías Roberti", "matias@example.com", "Buenos Aires", "Cabildo 2200", "C1428"),
+    ]
 
-db.products.insert_many(products)
+    users = []
 
-thinkpad_id = products[0]["_id"]
-mouse_id = products[1]["_id"]
-keyboard_id = products[2]["_id"]
-monitor_id = products[3]["_id"]
-tshirt_id = products[4]["_id"]
-phone_id = products[5]["_id"]
-headphones_id = products[6]["_id"]
-
-print("Productos insertados:", db.products.count_documents({}))
-
-
-# ============================================================
-# 5. CARGA DE ÓRDENES
-# ============================================================
-# En orders embebemos los items comprados.
-# Esto permite conservar un snapshot histórico del producto.
-
-orders = [
-    {
-        "_id": ObjectId(),
-        "order_number": "ORD-2026-000001",
-        "user_id": agustin_id,
-        "user_email": "agustin@example.com",
-        "status": "paid",
-        "items": [
-            {
-                "product_id": thinkpad_id,
-                "sku": "NOTE-THINK-X1",
-                "name": "Lenovo ThinkPad X1",
-                "category": "electronics",
-                "quantity": 1,
-                "unit_price": Decimal128("1299.99"),
-                "subtotal": Decimal128("1299.99")
-            },
-            {
-                "product_id": mouse_id,
-                "sku": "MOUSE-LOGI-MX",
-                "name": "Mouse Logitech MX Master",
-                "category": "electronics",
-                "quantity": 1,
-                "unit_price": Decimal128("85.00"),
-                "subtotal": Decimal128("85.00")
+    for i, (name, email, city, street, zip_code) in enumerate(users_data, start=1):
+        users.append({
+            "_id": ObjectId(),
+            "name": name,
+            "email": email,
+            "status": "active",
+            "created_at": datetime(2026, 5, i, 9, 0, tzinfo=timezone.utc),
+            "default_address": {
+                "street": street,
+                "city": city,
+                "country": "Argentina",
+                "zip_code": zip_code
             }
-        ],
-        "total_amount": Decimal128("1384.99"),
-        "currency": "USD",
-        "shipping_address": users[0]["default_address"],
-        "created_at": datetime(2026, 5, 10, 10, 30, tzinfo=timezone.utc),
-        "paid_at": datetime(2026, 5, 10, 10, 31, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "order_number": "ORD-2026-000002",
-        "user_id": lucia_id,
-        "user_email": "lucia@example.com",
-        "status": "paid",
-        "items": [
-            {
-                "product_id": monitor_id,
-                "sku": "MON-24-SAMSUNG",
-                "name": "Monitor Samsung 24 pulgadas",
-                "category": "electronics",
-                "quantity": 1,
-                "unit_price": Decimal128("150.00"),
-                "subtotal": Decimal128("150.00")
-            },
-            {
-                "product_id": keyboard_id,
-                "sku": "KEY-MECH-RED",
-                "name": "Teclado Mecánico Redragon",
-                "category": "electronics",
-                "quantity": 1,
-                "unit_price": Decimal128("50.00"),
-                "subtotal": Decimal128("50.00")
-            }
-        ],
-        "total_amount": Decimal128("200.00"),
-        "currency": "USD",
-        "shipping_address": users[1]["default_address"],
-        "created_at": datetime(2026, 5, 11, 15, 0, tzinfo=timezone.utc),
-        "paid_at": datetime(2026, 5, 11, 15, 2, tzinfo=timezone.utc)
+        })
+
+    db.users.insert_many(users)
+    print(f"Usuarios insertados: {len(users)}")
+    return users
+
+
+def create_products():
+    """
+    Crea un catálogo de productos electrónicos con nombres simples.
+    Todos los documentos usan category='electronics'.
+    """
+
+    catalog = [
+        ("ELEC-COMPUTER", "Computadora", "computacion", "1200.00", 80, [("ram", "16GB"), ("cpu", "Intel i7"), ("storage", "512GB SSD")]),
+        ("ELEC-PHONE", "Celular", "telefonia", "850.00", 100, [("storage", "256GB"), ("camera", "50MP"), ("battery", "4000mAh")]),
+        ("ELEC-TABLET", "Tablet", "tablets", "650.00", 70, [("storage", "128GB"), ("screen", "10 inch"), ("connection", "WiFi")]),
+        ("ELEC-MONITOR", "Monitor", "perifericos", "180.00", 120, [("size", "24 inch"), ("resolution", "Full HD"), ("refresh_rate", "75Hz")]),
+        ("ELEC-KEYBOARD", "Teclado", "perifericos", "45.00", 180, [("layout", "QWERTY"), ("connection", "USB"), ("backlight", "true")]),
+        ("ELEC-MOUSE", "Mouse", "perifericos", "35.00", 220, [("connection", "Bluetooth"), ("dpi", "4000"), ("color", "black")]),
+        ("ELEC-HEADPHONES", "Auriculares", "audio", "120.00", 130, [("connection", "Bluetooth"), ("noise_cancelling", "true"), ("battery_life", "24h")]),
+        ("ELEC-SPEAKER", "Parlante", "audio", "95.00", 100, [("connection", "Bluetooth"), ("power", "20W"), ("water_resistant", "true")]),
+        ("ELEC-WEBCAM", "Webcam", "perifericos", "70.00", 95, [("resolution", "Full HD"), ("fps", "30"), ("connection", "USB")]),
+        ("ELEC-MICROPHONE", "Micrófono", "audio", "110.00", 85, [("connection", "USB"), ("pattern", "cardioid"), ("color", "black")]),
+        ("ELEC-ROUTER", "Router", "redes", "100.00", 90, [("wifi", "WiFi 6"), ("ports", "4"), ("band", "dual")]),
+        ("ELEC-SSD", "Disco SSD", "almacenamiento", "90.00", 200, [("capacity", "1TB"), ("type", "SSD"), ("interface", "NVMe")]),
+        ("ELEC-RAM", "Memoria RAM", "componentes", "75.00", 160, [("capacity", "16GB"), ("type", "DDR4"), ("speed", "3200MHz")]),
+        ("ELEC-CHARGER", "Cargador", "accesorios", "25.00", 260, [("type", "USB-C"), ("power", "65W"), ("fast_charge", "true")]),
+        ("ELEC-HDMI", "Cable HDMI", "accesorios", "12.00", 350, [("length", "2m"), ("type", "HDMI"), ("version", "2.1")]),
+        ("ELEC-HUB", "Hub USB-C", "accesorios", "60.00", 140, [("ports", "7"), ("connection", "USB-C"), ("hdmi", "true")]),
+        ("ELEC-PRINTER", "Impresora", "oficina", "160.00", 70, [("type", "inkjet"), ("connection", "WiFi"), ("color_print", "true")]),
+        ("ELEC-WATCH", "Reloj inteligente", "wearables", "210.00", 110, [("gps", "true"), ("battery_life", "7d"), ("water_resistant", "true")]),
+        ("ELEC-CONSOLE", "Consola", "gaming", "500.00", 65, [("storage", "1TB"), ("resolution", "4K"), ("controllers", "1")]),
+        ("ELEC-CONTROLLER", "Joystick", "gaming", "65.00", 150, [("connection", "Bluetooth"), ("battery_life", "30h"), ("color", "black")]),
+        ("ELEC-CAMERA", "Cámara", "fotografia", "320.00", 55, [("resolution", "24MP"), ("storage", "SD"), ("video", "4K")]),
+        ("ELEC-TV", "Televisor", "video", "700.00", 45, [("size", "50 inch"), ("resolution", "4K"), ("smart_tv", "true")]),
+        ("ELEC-PROJECTOR", "Proyector", "video", "430.00", 40, [("resolution", "Full HD"), ("brightness", "3500lm"), ("connection", "HDMI")]),
+        ("ELEC-CARDREADER", "Lector de tarjetas", "accesorios", "18.00", 190, [("connection", "USB-C"), ("formats", "SD/microSD"), ("portable", "true")]),
+    ]
+
+    products = []
+    now = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+
+    for i, (sku, name, subcategory, price, stock, specs_pairs) in enumerate(catalog):
+        products.append({
+            "_id": ObjectId(),
+            "sku": sku,
+            "name": name,
+            "category": "electronics",
+            "subcategory": subcategory,
+            "brand": "ElectroStore",
+            "status": "active",
+            "price": Decimal128(price),
+            "currency": "USD",
+            "stock": stock,
+            "specs": [{"k": k, "v": v} for k, v in specs_pairs],
+            "created_at": now + timedelta(minutes=i * 10),
+            "updated_at": now + timedelta(minutes=i * 10)
+        })
+
+    db.products.insert_many(products)
+    print(f"Productos insertados: {len(products)}")
+    return products
+
+
+def decimal_to_float(value):
+    """
+    Convierte Decimal128 a float para cálculos internos del seed.
+    """
+    return float(value.to_decimal())
+
+
+def create_order_item(product, quantity):
+    """
+    Crea un item embebido dentro de una orden.
+    Se guarda snapshot histórico del producto.
+    """
+
+    unit_price = product["price"]
+    subtotal = decimal_to_float(unit_price) * quantity
+
+    return {
+        "product_id": product["_id"],
+        "sku": product["sku"],
+        "name": product["name"],
+        "category": product["category"],
+        "subcategory": product["subcategory"],
+        "quantity": quantity,
+        "unit_price": unit_price,
+        "subtotal": Decimal128(f"{subtotal:.2f}")
     }
-]
-
-db.orders.insert_many(orders)
-
-order1_id = orders[0]["_id"]
-order2_id = orders[1]["_id"]
-
-print("Órdenes insertadas:", db.orders.count_documents({}))
 
 
-# ============================================================
-# 6. CARGA DE PAGOS
-# ============================================================
+def create_orders_payments_movements(users, products):
+    """
+    Crea órdenes realistas con varias ventas por día.
+    Todas las órdenes contienen productos electrónicos.
+    """
 
-payments = [
-    {
-        "_id": ObjectId(),
-        "order_id": order1_id,
-        "user_id": agustin_id,
-        "provider": "stripe",
-        "payment_method": "credit_card",
-        "status": "approved",
-        "amount": Decimal128("1384.99"),
-        "currency": "USD",
-        "transaction_id": "txn_000001",
-        "created_at": datetime(2026, 5, 10, 10, 31, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "order_id": order2_id,
-        "user_id": lucia_id,
-        "provider": "mercadopago",
-        "payment_method": "debit_card",
-        "status": "approved",
-        "amount": Decimal128("200.00"),
-        "currency": "USD",
-        "transaction_id": "txn_000002",
-        "created_at": datetime(2026, 5, 11, 15, 2, tzinfo=timezone.utc)
+    products_by_sku = {p["sku"]: p for p in products}
+    users_by_email = {u["email"]: u for u in users}
+
+    daily_order_counts = {
+        "2026-05-10": 4,
+        "2026-05-11": 3,
+        "2026-05-12": 5,
+        "2026-05-13": 2,
+        "2026-05-14": 6,
+        "2026-05-15": 4,
+        "2026-05-16": 5,
+        "2026-05-17": 3,
+        "2026-05-18": 7,
+        "2026-05-19": 4,
+        "2026-05-20": 5,
     }
-]
 
-db.payments.insert_many(payments)
+    # Patrones de compra realistas: algunos tickets altos y muchos accesorios.
+    baskets = [
+        [("ELEC-COMPUTER", 1), ("ELEC-MOUSE", 1)],
+        [("ELEC-PHONE", 1), ("ELEC-CHARGER", 1)],
+        [("ELEC-MONITOR", 1), ("ELEC-KEYBOARD", 1), ("ELEC-MOUSE", 1)],
+        [("ELEC-HDMI", 3), ("ELEC-CARDREADER", 1)],
+        [("ELEC-HEADPHONES", 1), ("ELEC-SPEAKER", 1)],
+        [("ELEC-SSD", 1), ("ELEC-RAM", 1)],
+        [("ELEC-TABLET", 1), ("ELEC-HUB", 1)],
+        [("ELEC-WEBCAM", 1), ("ELEC-MICROPHONE", 1)],
+        [("ELEC-ROUTER", 1), ("ELEC-HDMI", 2)],
+        [("ELEC-WATCH", 1), ("ELEC-CHARGER", 1)],
+        [("ELEC-TV", 1), ("ELEC-HDMI", 2)],
+        [("ELEC-PRINTER", 1), ("ELEC-CARDREADER", 2)],
+        [("ELEC-CONSOLE", 1), ("ELEC-CONTROLLER", 2)],
+        [("ELEC-PROJECTOR", 1), ("ELEC-HDMI", 2)],
+        [("ELEC-CHARGER", 2), ("ELEC-HUB", 1)],
+    ]
 
-print("Pagos insertados:", db.payments.count_documents({}))
+    providers = ["stripe", "mercadopago"]
+    payment_methods = ["credit_card", "debit_card", "wallet"]
+
+    users_emails = [u["email"] for u in users]
+    orders = []
+    payments = []
+    inventory_movements = []
+
+    order_index = 1
+
+    for day_index, (date_key, count) in enumerate(daily_order_counts.items()):
+        for n in range(count):
+            email = users_emails[(order_index - 1) % len(users_emails)]
+            basket = baskets[(order_index - 1) % len(baskets)]
+            provider = providers[(order_index - 1) % len(providers)]
+            payment_method = payment_methods[(order_index - 1) % len(payment_methods)]
+
+            created_at = datetime.fromisoformat(f"{date_key}T{9 + (n * 2):02d}:{(15 + n * 7) % 60:02d}:00+00:00")
+            paid_at = created_at + timedelta(minutes=2)
+
+            user = users_by_email[email]
+            order_id = ObjectId()
+            order_number = f"ORD-2026-{order_index:06d}"
+
+            items = []
+            total = 0.0
+
+            for sku, quantity in basket:
+                product = products_by_sku[sku]
+                item = create_order_item(product, quantity)
+                items.append(item)
+                total += decimal_to_float(item["subtotal"])
+
+                inventory_movements.append({
+                    "_id": ObjectId(),
+                    "product_id": product["_id"],
+                    "order_id": order_id,
+                    "movement_type": "sale",
+                    "quantity": -quantity,
+                    "reason": "checkout",
+                    "created_at": paid_at
+                })
+
+            orders.append({
+                "_id": order_id,
+                "order_number": order_number,
+                "user_id": user["_id"],
+                "user_email": user["email"],
+                "status": "paid",
+                "items": items,
+                "total_amount": Decimal128(f"{total:.2f}"),
+                "currency": "USD",
+                "shipping_address": user["default_address"],
+                "created_at": created_at,
+                "paid_at": paid_at
+            })
+
+            payments.append({
+                "_id": ObjectId(),
+                "order_id": order_id,
+                "user_id": user["_id"],
+                "provider": provider,
+                "payment_method": payment_method,
+                "status": "approved",
+                "amount": Decimal128(f"{total:.2f}"),
+                "currency": "USD",
+                "transaction_id": f"txn_{order_index:06d}",
+                "created_at": paid_at
+            })
+
+            order_index += 1
+
+    db.orders.insert_many(orders)
+    db.payments.insert_many(payments)
+    db.inventory_movements.insert_many(inventory_movements)
+
+    # Descontar stock en products según los movimientos generados.
+    for movement in inventory_movements:
+        db.products.update_one(
+            {"_id": movement["product_id"]},
+            {"$inc": {"stock": movement["quantity"]}}
+        )
+
+    print(f"Órdenes insertadas: {len(orders)}")
+    print(f"Pagos insertados: {len(payments)}")
+    print(f"Movimientos de inventario insertados: {len(inventory_movements)}")
+
+    return orders, payments, inventory_movements
 
 
-# ============================================================
-# 7. CARGA DE MOVIMIENTOS DE INVENTARIO
-# ============================================================
+def create_daily_sales(orders):
+    """
+    Genera la colección daily_sales a partir de las órdenes pagadas.
+    Varios días tienen múltiples órdenes, por lo que el reporte es
+    más realista y defendible.
+    """
 
-inventory_movements = [
-    {
-        "_id": ObjectId(),
-        "product_id": thinkpad_id,
-        "order_id": order1_id,
-        "movement_type": "sale",
-        "quantity": -1,
-        "reason": "checkout",
-        "created_at": datetime(2026, 5, 10, 10, 31, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "product_id": mouse_id,
-        "order_id": order1_id,
-        "movement_type": "sale",
-        "quantity": -1,
-        "reason": "checkout",
-        "created_at": datetime(2026, 5, 10, 10, 31, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "product_id": monitor_id,
-        "order_id": order2_id,
-        "movement_type": "sale",
-        "quantity": -1,
-        "reason": "checkout",
-        "created_at": datetime(2026, 5, 11, 15, 2, tzinfo=timezone.utc)
-    },
-    {
-        "_id": ObjectId(),
-        "product_id": keyboard_id,
-        "order_id": order2_id,
-        "movement_type": "sale",
-        "quantity": -1,
-        "reason": "checkout",
-        "created_at": datetime(2026, 5, 11, 15, 2, tzinfo=timezone.utc)
-    }
-]
+    daily = defaultdict(lambda: {"total_orders": 0, "total_revenue": 0.0})
 
-db.inventory_movements.insert_many(inventory_movements)
+    for order in orders:
+        if order["status"] != "paid":
+            continue
 
-print("Movimientos de inventario insertados:", db.inventory_movements.count_documents({}))
+        date_key = order["created_at"].strftime("%Y-%m-%d")
+        daily[date_key]["total_orders"] += 1
+        daily[date_key]["total_revenue"] += decimal_to_float(order["total_amount"])
+
+    daily_sales = []
+
+    for date_key, values in sorted(daily.items()):
+        daily_sales.append({
+            "_id": ObjectId(),
+            "date": date_key,
+            "total_orders": values["total_orders"],
+            "total_revenue": Decimal128(f"{values['total_revenue']:.2f}"),
+            "currency": "USD",
+            "updated_at": datetime.now(timezone.utc)
+        })
+
+    db.daily_sales.insert_many(daily_sales)
+    print(f"Daily sales insertadas: {len(daily_sales)}")
+    return daily_sales
 
 
-# ============================================================
-# 8. CARGA DE DAILY SALES
-# ============================================================
-# Esta colección funciona como una vista materializada inicial.
+def create_indexes():
+    """
+    Crea índices principales para consultas críticas.
+    """
 
-daily_sales = [
-    {
-        "_id": "2026-05-10",
-        "date": datetime(2026, 5, 10, 0, 0, tzinfo=timezone.utc),
-        "total_orders": 1,
-        "total_revenue": Decimal128("1384.99"),
-        "by_category": [
-            {
-                "category": "electronics",
-                "orders": 1,
-                "revenue": Decimal128("1384.99")
-            }
-        ],
-        "updated_at": datetime(2026, 5, 10, 23, 59, tzinfo=timezone.utc)
-    },
-    {
-        "_id": "2026-05-11",
-        "date": datetime(2026, 5, 11, 0, 0, tzinfo=timezone.utc),
-        "total_orders": 1,
-        "total_revenue": Decimal128("200.00"),
-        "by_category": [
-            {
-                "category": "electronics",
-                "orders": 1,
-                "revenue": Decimal128("200.00")
-            }
-        ],
-        "updated_at": datetime(2026, 5, 11, 23, 59, tzinfo=timezone.utc)
-    }
-]
+    db.products.create_index([("category", 1), ("status", 1), ("price", -1)])
+    db.products.create_index([("specs.k", 1), ("specs.v", 1)])
+    db.orders.create_index([("user_email", 1), ("created_at", -1)])
+    db.orders.create_index([("status", 1), ("created_at", 1)])
+    db.orders.create_index([("user_id", 1), ("created_at", -1)])
+    db.payments.create_index([("order_id", 1)])
+    db.inventory_movements.create_index([("product_id", 1), ("created_at", -1)])
 
-db.daily_sales.insert_many(daily_sales)
-
-print("Daily sales insertadas:", db.daily_sales.count_documents({}))
+    print("Índices principales creados correctamente.")
 
 
-# ============================================================
-# 9. VALIDACIÓN FINAL
-# ============================================================
+def validate_seed():
+    """
+    Muestra la cantidad de documentos por colección.
+    """
 
-print("\n================ VALIDACIÓN FINAL ================")
-print("Users:", db.users.count_documents({}))
-print("Products:", db.products.count_documents({}))
-print("Orders:", db.orders.count_documents({}))
-print("Payments:", db.payments.count_documents({}))
-print("Inventory movements:", db.inventory_movements.count_documents({}))
-print("Daily sales:", db.daily_sales.count_documents({}))
-print("==================================================")
-print("Seed ejecutado correctamente.")
+    print("\n================ VALIDACIÓN FINAL ================")
+    print(f"Users: {db.users.count_documents({})}")
+    print(f"Products: {db.products.count_documents({})}")
+    print(f"Orders: {db.orders.count_documents({})}")
+    print(f"Payments: {db.payments.count_documents({})}")
+    print(f"Inventory movements: {db.inventory_movements.count_documents({})}")
+    print(f"Daily sales: {db.daily_sales.count_documents({})}")
+    print("==================================================")
+
+
+if __name__ == "__main__":
+
+    reset_database()
+
+    users = create_users()
+    products = create_products()
+    orders, payments, movements = create_orders_payments_movements(users, products)
+    daily_sales = create_daily_sales(orders)
+    create_indexes()
+    validate_seed()
+
+    print("\nSeed ejecutado correctamente.")
