@@ -277,7 +277,7 @@ Esta clave permite distribuir las órdenes entre shards y evitar hotspots genera
 
 ## Repositorio
 
-https://github.com/agustinpena20/ecommerce-nosql-mongodb-redis
+https://github.com/agusriver/ecommerce-nosql-mongodb-redis
 
 ## Integrantes
 
